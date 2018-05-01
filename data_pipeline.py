@@ -1,6 +1,7 @@
 import luigi
 import luigi.contrib.postgres
 import luigi.contrib.target
+import numpy
 import pandas
 import pycountry
 import csv
@@ -23,6 +24,7 @@ class Config(luigi.Config):
     invoice_time_table = 'invoice_time'
     product_info_table = 'product_info'
     association_rules_table = 'association_rules'
+    outliers_table = 'invoice_outliers'
 
     column_separator = "\t"
 
@@ -256,6 +258,30 @@ class AssociationRulesGeneration(luigi.Task):
                 InvoiceTimeLoading(self.date)]
 
 
+class OutliersDetection(luigi.Task):
+    date = luigi.DateParameter()
+
+    def run(self):
+        data = pandas.read_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv"))
+        quantity = data['quantity']
+
+        q75, q25 = numpy.percentile(quantity, [75, 25])
+        iqr = q75 - q25
+        upper_fence = q75 + (30.0 * iqr)
+
+        outliers = data[data.quantity > upper_fence]
+        outliers.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"), encoding="utf-8", header=False, index=None)
+
+    def output(self):
+        return luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"))
+
+    def requires(self):
+        return [CustomerInfoLoading(self.date),
+                InvoiceLoading(self.date),
+                ProductInfoLoading(self.date),
+                InvoiceTimeLoading(self.date)]
+
+
 class AssociationRulesLoading(luigi.contrib.postgres.CopyToTable):
     date = luigi.DateParameter()
 
@@ -280,8 +306,29 @@ class AssociationRulesLoading(luigi.contrib.postgres.CopyToTable):
         return AssociationRulesGeneration(self.date)
 
 
-class DataDumpLoadComplete(luigi.Task):
+class OutliersLoading(luigi.contrib.postgres.CopyToTable):
+    date = luigi.DateParameter()
+
+    host = Config.host
+    database = Config.database
+    user = Config.user
+    password = Config.password
+    table = Config.outliers_table
+    column_separator = ","
+
+    columns = [("Invoice_No", "TEXT"),
+               ("Stock_Code", "TEXT"),
+               ("Quantity", "INT"),
+               ("Invoice_Date", "TEXT"),
+               ("Customer_Id", "INT")]
+
+    def requires(self):
+        return OutliersDetection(self.date)
+
+
+class CompleteDataDumpLoad(luigi.Task):
     date = luigi.DateParameter()
 
     def requires(self):
-        return AssociationRulesLoading(self.date)
+        return [AssociationRulesLoading(self.date),
+                OutliersLoading(self.date)]
