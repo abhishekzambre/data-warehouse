@@ -47,7 +47,7 @@ class DataDump(luigi.ExternalTask):
         Returns the target output for this task.
         In this case, it expects a csv file to be present in data directory
 
-        :return: list of target output for this task.
+        :return: list of target output containing csv files.
         :rtype: object (:py:class:`luigi.target.Target`)
         """
         return [luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.customer_info_table + ".csv")),
@@ -57,7 +57,7 @@ class DataDump(luigi.ExternalTask):
 
 class CustomerInfoPreProcessing(luigi.Task):
     """
-    This task picks up the csv containing customer information. It then perform clean ups and transformations the contents of this file.
+    This task perform data cleansing and transformations on the customer_info table's csv file.
 
     It will also add column named called Country_Code, which will be used in data insights dashboard.
     """
@@ -65,12 +65,16 @@ class CustomerInfoPreProcessing(luigi.Task):
 
     def requires(self):
         """
-
-        :return:
+        This task depends on the DataDump task.
         """
         return DataDump(self.date)
 
     def run(self):
+        """
+        This function picks up the csv containing customer information, and perform data cleansing and transformations.
+
+        It will also add Country_Code column. Output will be written in intermediate csv file.
+        """
         data = pandas.read_csv(self.input()[0].path)
 
         data.country.fillna("Not Available", inplace=True)
@@ -86,16 +90,31 @@ class CustomerInfoPreProcessing(luigi.Task):
         data.to_csv(self.input()[0].path + "_processed", encoding="utf-8", header=False, index=None)
 
     def output(self):
+        """
+        Returns the csv file as target to be loaded into database.
+
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return luigi.LocalTarget(self.input()[0].path + "_processed")
 
 
 class InvoicePreProcessing(luigi.Task):
+    """
+    This task perform data cleansing and transformations on the invoice table's csv file.
+    """
     date = luigi.DateParameter()
 
     def requires(self):
+        """
+        This task depends on the DataDump task.
+        """
         return DataDump(self.date)
 
     def run(self):
+        """
+        This function picks up the csv containing invoice information, and perform data cleansing and transformations.
+        """
         data = pandas.read_csv(self.input()[1].path)
         data.invoicedate = pandas.to_datetime(data.invoicedate)
         data.rename(columns={"invoiceno": "Invoice_No", "stockcode": "Stock_Code",
@@ -104,16 +123,37 @@ class InvoicePreProcessing(luigi.Task):
         data.to_csv(self.input()[1].path + "_processed", encoding="utf-8", header=False, index=None)
 
     def output(self):
+        """
+        Returns the csv file as target to be loaded into database.
+
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return luigi.LocalTarget(self.input()[1].path + "_processed")
 
 
 class InvoiceTimeGeneration(luigi.Task):
+    """
+    This task will divide invoice_date column from invoice table's csv file, into separate columns such as Day,
+    Week, Quarter, Year etc.
+
+    This will be helpful in performing data analytics.
+    """
     date = luigi.DateParameter()
 
     def requires(self):
+        """
+        This task depends on the DataDump task.
+        """
         return DataDump(self.date)
 
     def run(self):
+        """
+        This function picks up invoice_date column from invoice csv file.
+
+        Date will be further broken down in to columns such as Day, Week, Quarter, Year etc., and will be written in
+        separate csv file.
+        """
         data = pandas.read_csv(self.input()[1].path)
 
         data.invoicedate = pandas.to_datetime(data.invoicedate)
@@ -133,16 +173,33 @@ class InvoiceTimeGeneration(luigi.Task):
         data_splitted.to_csv(self.input()[1].path + "_time", sep="\t", encoding="utf-8", header=False, index=None)
 
     def output(self):
+        """
+        Returns the csv file as target to be loaded into database.
+
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return luigi.LocalTarget(self.input()[1].path + "_time")
 
 
 class ProductInfoPreProcessing(luigi.Task):
+    """
+    This task perform data cleansing and transformations on the product_info table's csv file.
+    """
     date = luigi.DateParameter()
 
     def requires(self):
+        """
+        This task depends on the DataDump task.
+        """
         return DataDump(self.date)
 
     def run(self):
+        """
+        This function will pick up csv file and perform data cleansing and transformations.
+
+        It will remove extra whitespaces from description column. Finally, will load data into intermediate csv file.
+        """
         data = pandas.read_csv(self.input()[2].path)
 
         data.description.replace('\s+', ' ', regex=True, inplace=True)
@@ -152,10 +209,19 @@ class ProductInfoPreProcessing(luigi.Task):
         data.to_csv(self.input()[2].path + "_processed", sep="\t", encoding="utf-8", header=False, index=None)
 
     def output(self):
+        """
+        Returns the csv file as target to be loaded into database.
+
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return luigi.LocalTarget(self.input()[2].path + "_processed")
 
 
 class CustomerInfoLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load csv file into Postgres table.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -170,10 +236,16 @@ class CustomerInfoLoading(luigi.contrib.postgres.CopyToTable):
                ("Country_Code", "TEXT")]
 
     def requires(self):
+        """
+        This task depends on customer_info csv cleaning task
+        """
         return CustomerInfoPreProcessing(self.date)
 
 
 class InvoiceLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load csv file into Postgres table.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -190,10 +262,16 @@ class InvoiceLoading(luigi.contrib.postgres.CopyToTable):
                ("Customer_Id", "INT")]
 
     def requires(self):
+        """
+        This task depends on invoice csv cleaning task
+        """
         return InvoicePreProcessing(self.date)
 
 
 class InvoiceTimeLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load csv file into Postgres table.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -215,10 +293,16 @@ class InvoiceTimeLoading(luigi.contrib.postgres.CopyToTable):
                ("Year", "INT")]
 
     def requires(self):
+        """
+        This task depends on invoice_time csv generation task
+        """
         return InvoiceTimeGeneration(self.date)
 
 
 class ProductInfoLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load csv file into Postgres table.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -233,13 +317,35 @@ class ProductInfoLoading(luigi.contrib.postgres.CopyToTable):
                ("Unit_Price", "FLOAT")]
 
     def requires(self):
+        """
+        This task depends on product_info csv cleaning task
+        """
         return ProductInfoPreProcessing(self.date)
 
 
 class AssociationRulesGeneration(luigi.Task):
+    """
+    This task will generate association rules i.e. customers who have bought this, also bought this.
+
+    This will help business owner to launch bundle offers.
+
+    Further extension can be made to check what items are being returned frequently.
+    """
     date = luigi.DateParameter()
 
+    def requires(self):
+        """
+        This task will execute once all previous csv files are loaded into the database.
+        """
+        return [CustomerInfoLoading(self.date),
+                InvoiceLoading(self.date),
+                ProductInfoLoading(self.date),
+                InvoiceTimeLoading(self.date)]
+
     def run(self):
+        """
+        Apriori algorithm will be used in order to generate association rules.
+        """
         data = pandas.read_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv"))
 
         grouped = data[['customerid', 'stockcode']].groupby('customerid')
@@ -276,20 +382,39 @@ class AssociationRulesGeneration(luigi.Task):
                            encoding="utf-8", header=False, index=None)
 
     def output(self):
+        """
+        Returns the csv file as target to be loaded into database.
+
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return luigi.LocalTarget(
             self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_association_rules"))
 
+
+class OutliersDetection(luigi.Task):
+    """
+    This task will pick up invoice table csv and perform Tukey's IQR outlier detection algorithm on the data.
+    """
+    date = luigi.DateParameter()
+
     def requires(self):
+        """
+        This task will execute once all previous csv files are loaded into the database.
+        """
         return [CustomerInfoLoading(self.date),
                 InvoiceLoading(self.date),
                 ProductInfoLoading(self.date),
                 InvoiceTimeLoading(self.date)]
 
-
-class OutliersDetection(luigi.Task):
-    date = luigi.DateParameter()
-
     def run(self):
+        """
+        Tukey's IQR will be used to detect outliers/anomalies.
+
+        We have only performed this on quantity column as a demonstration purpose.
+
+        More fields can be added to widen the search for anomalies.
+        """
         data = pandas.read_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv"))
 
         quantity = data['quantity']
@@ -302,16 +427,19 @@ class OutliersDetection(luigi.Task):
                         encoding="utf-8", header=False, index=None)
 
     def output(self):
-        return luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"))
+        """
+        Returns the csv file as target to be loaded into database.
 
-    def requires(self):
-        return [CustomerInfoLoading(self.date),
-                InvoiceLoading(self.date),
-                ProductInfoLoading(self.date),
-                InvoiceTimeLoading(self.date)]
+        :return: target output containing csv files.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
+        return luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"))
 
 
 class AssociationRulesLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load generated association rules into database.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -332,10 +460,16 @@ class AssociationRulesLoading(luigi.contrib.postgres.CopyToTable):
                ("Conviction", "FLOAT")]
 
     def requires(self):
+        """
+        This task depends on association rules generation.
+        """
         return AssociationRulesGeneration(self.date)
 
 
 class OutliersLoading(luigi.contrib.postgres.CopyToTable):
+    """
+    This task will load detected outliers into database.
+    """
     date = luigi.DateParameter()
 
     host = Config.host
@@ -352,12 +486,22 @@ class OutliersLoading(luigi.contrib.postgres.CopyToTable):
                ("Customer_Id", "INT")]
 
     def requires(self):
+        """
+        This task depends on outliers detection task.
+        """
         return OutliersDetection(self.date)
 
 
 class CompleteDataDumpLoad(luigi.Task):
+    """
+    This is the final task in the data pipeline
+    """
     date = luigi.DateParameter()
 
     def requires(self):
+        """
+        This task will execute only if association rules and outliers are loaded into database.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return [AssociationRulesLoading(self.date),
                 OutliersLoading(self.date)]

@@ -169,4 +169,7 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-schedul
     * Password: FoE7IIcLO6q74g
 
 ## Authors
+
+For any issue or feedback, please feel free to contact me.
+
 * **Abhishek Zambre** - [abhiz.me](http://abhiz.me)
