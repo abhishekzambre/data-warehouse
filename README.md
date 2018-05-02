@@ -111,16 +111,19 @@ luigid
 - Place all csv files in directory
 - Directory contains should look like below
 ```
-data\2018_03_30\customer_info.csv data\2018_03_30\invoice.csv data\2018_03_30\product_info.csv
+data\2018_03_30\customer_info.csv data\2018_03_30\invoice.csv 
+data\2018_03_30\product_info.csv
 ```
 - We are now ready to execute the program
 - Execute below command, and check Luigi UI link for status updates
 ```
-PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --date 2018-03-30
+PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad 
+--date 2018-03-30
 ```
 - For running program locally (i.e. without UI updates), use below command
 ```
-PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-scheduler --date 2018-03-30
+PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad 
+--local-scheduler --date 2018-03-30
 ```
 
 ## Output Verification
