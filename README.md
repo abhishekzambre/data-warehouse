@@ -55,7 +55,7 @@ pip3 install pycountry
 Once all required softwares and modules are installed. Now its time to bring the system up.
 
 
-####PostgreSQL
+#### PostgreSQL
 - Check if PostgreSQL server is up and running
 ```
 brew services list
@@ -88,14 +88,14 @@ configurations of Metabase accordingly.
 psql
 ```
 
-####Luigi
+#### Luigi
 - Use below command to start luigi daemon. Once it is up and running, navigate to [http://localhost:8082/](http://localhost:8082/)
 ```
 luigid
 ```
 - Please make sure the link is working
 
-####Metabase
+#### Metabase
 - Download the jar file (version: 0.28.6) from [here](https://www.metabase.com/start/jar.html)
 - Once downloaded, keep the jar file in the Metabase directory of provided source code of this project
 - Make sure metabase.db.trace.db and metabase.db.mv.db files are present in the Metabase directory
@@ -104,7 +104,7 @@ luigid
 - Please make sure the link is working
 - User credentials can be found in the credentials section
 
-##Executing Main Program
+## Executing Main Program
 - Unzip the provided source code zip file
 - Make sure data_pipeline.py file is present
 - Program expects a directory called data, which will contain data dumps in directory with name in YYYY_MM_DD format (for ex. data/2018_03_30/)
@@ -123,7 +123,7 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --date 2018-03-
 PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-scheduler --date 2018-03-30
 ```
 
-##Output Verification
+## Output Verification
 - Navigae to Luigi UI, which should display task status as below
 
 ![Luigi Task Status Image](images/01_luigi_task_status.png)
@@ -137,7 +137,7 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-schedul
 ![Luigi Task Dependencies D3 Image](images/03_luigi_task_dependencies_d3.png)
 
 
-##Database Verification
+## Database Verification
 - Launch PostgreSQL client, and look for below list of tables
     * customer_info
     * invoice
@@ -148,7 +148,7 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-schedul
 
 - If any table is missing, check luigi logs for any errors or exception
 
-##Data Insights Dashboard
+## Data Insights Dashboard
 - Navigate to Metabase dashboard, and enter the provided credentials
 
 ![Metabase Login Image](images/04_metabase_login.png)
@@ -157,7 +157,7 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-schedul
 
 ![Metabase Dashboard Image](images/05_metabase_dashboard.png)
 
-##Credentials
+## Credentials
 - PostgreSQL
     * Admin user: abhishekzambre
     * Password: sky
@@ -168,5 +168,5 @@ PYTHONPATH='.' luigi --module data_pipeline CompleteDataDumpLoad --local-schedul
     * Business Owner User: owner@somebusiness.com
     * Password: FoE7IIcLO6q74g
 
-##Authors
+## Authors
 * **Abhishek Zambre** - [abhiz.me](http://abhiz.me)
