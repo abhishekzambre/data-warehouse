@@ -1,17 +1,22 @@
-import luigi
-import luigi.contrib.postgres
-import luigi.contrib.target
+import ast
+import csv
 import numpy
 import pandas
 import pycountry
-import csv
+
+import luigi
+import luigi.contrib.target
+import luigi.contrib.postgres
+
+from mlxtend.frequent_patterns import apriori
 from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import association_rules
-from mlxtend.frequent_patterns import apriori
-from ast import literal_eval
 
 
 class Config(luigi.Config):
+    """
+    Luigi configuration file containing information such as PostgreSQL connection details, database table names etc
+    """
     date = luigi.DateParameter()
 
     host = 'localhost'
@@ -30,18 +35,39 @@ class Config(luigi.Config):
 
 
 class DataDump(luigi.ExternalTask):
+    """
+    This is an external data dump task.
+
+    This task is the top of the dependency graph and will only be successful if the data dump is available.
+    """
     date = luigi.DateParameter()
 
     def output(self):
+        """
+        Returns the target output for this task.
+        In this case, it expects a csv file to be present in data directory
+
+        :return: list of target output for this task.
+        :rtype: object (:py:class:`luigi.target.Target`)
+        """
         return [luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.customer_info_table + ".csv")),
                 luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv")),
                 luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.product_info_table + ".csv"))]
 
 
 class CustomerInfoPreProcessing(luigi.Task):
+    """
+    This task picks up the csv containing customer information. It then perform clean ups and transformations the contents of this file.
+
+    It will also add column named called Country_Code, which will be used in data insights dashboard.
+    """
     date = luigi.DateParameter()
 
     def requires(self):
+        """
+
+        :return:
+        """
         return DataDump(self.date)
 
     def run(self):
@@ -55,7 +81,6 @@ class CustomerInfoPreProcessing(luigi.Task):
             countries[country.name] = country.alpha_2
 
         data['Country_Code'] = data.country.map(countries)
-
         data.rename(columns={"customerid": "Customer_ID", "country": "Country_Name"}, inplace=True)
 
         data.to_csv(self.input()[0].path + "_processed", encoding="utf-8", header=False, index=None)
@@ -92,7 +117,6 @@ class InvoiceTimeGeneration(luigi.Task):
         data = pandas.read_csv(self.input()[1].path)
 
         data.invoicedate = pandas.to_datetime(data.invoicedate)
-
         data_splitted = pandas.DataFrame({
             "Invoice_Date": data.invoicedate,
             "DayOfWeek": data.invoicedate.dt.dayofweek,
@@ -217,14 +241,16 @@ class AssociationRulesGeneration(luigi.Task):
 
     def run(self):
         data = pandas.read_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv"))
+
         grouped = data[['customerid', 'stockcode']].groupby('customerid')
         aggregated_data = grouped.aggregate(lambda x: list(x))
-        aggregated_data.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_aggregated"), encoding="utf-8", header=False, index=None)
+        aggregated_data.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_aggregated"),
+                               encoding="utf-8", header=False, index=None)
 
         temp = list()
         with open(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_aggregated"), 'r') as f:
             for row in csv.reader(f):
-                eval_temp = literal_eval(''.join(row))
+                eval_temp = ast.literal_eval(''.join(row))
                 if len(eval_temp) == 1:
                     continue
                 temp.append(eval_temp)
@@ -237,19 +263,21 @@ class AssociationRulesGeneration(luigi.Task):
         rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1.2)
 
         final_rules = pandas.DataFrame([rules['antecedants'].str.join(''),
-                                    rules['consequents'].str.join(''),
-                                    rules['antecedent support'],
-                                    rules['consequent support'],
-                                    rules['support'],
-                                    rules['confidence'],
-                                    rules['lift'],
-                                    rules['leverage'],
-                                    rules['conviction']]).T
+                                        rules['consequents'].str.join(''),
+                                        rules['antecedent support'],
+                                        rules['consequent support'],
+                                        rules['support'],
+                                        rules['confidence'],
+                                        rules['lift'],
+                                        rules['leverage'],
+                                        rules['conviction']]).T
 
-        final_rules.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_association_rules"), encoding="utf-8", header=False, index=None)
+        final_rules.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_association_rules"),
+                           encoding="utf-8", header=False, index=None)
 
     def output(self):
-        return luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_association_rules"))
+        return luigi.LocalTarget(
+            self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_association_rules"))
 
     def requires(self):
         return [CustomerInfoLoading(self.date),
@@ -263,14 +291,15 @@ class OutliersDetection(luigi.Task):
 
     def run(self):
         data = pandas.read_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv"))
-        quantity = data['quantity']
 
+        quantity = data['quantity']
         q75, q25 = numpy.percentile(quantity, [75, 25])
         iqr = q75 - q25
         upper_fence = q75 + (30.0 * iqr)
-
         outliers = data[data.quantity > upper_fence]
-        outliers.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"), encoding="utf-8", header=False, index=None)
+
+        outliers.to_csv(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"),
+                        encoding="utf-8", header=False, index=None)
 
     def output(self):
         return luigi.LocalTarget(self.date.strftime("data/%Y_%m_%d" + "/" + Config.invoice_table + ".csv_outliers"))
